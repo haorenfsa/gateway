@@ -184,9 +184,9 @@ func (r *Runner) subscribeAndTranslate(ctx context.Context) {
 				// Publish the IRs.
 				// Also validate the ir before sending it.
 				for key, val := range result.InfraIR {
-					r.Logger.WithValues("infra-ir", key).Info(val.YAMLString())
+					r.Logger.WithValues("infra-ir", key)
 					if err := val.Validate(); err != nil {
-						r.Logger.Error(err, "unable to validate infra ir, skipped sending it")
+						r.Logger.Error(err, "unable to validate infra ir, skipped sending it", "yaml", val.YAMLString())
 						errChan <- err
 					} else {
 						r.InfraIR.Store(key, val)
@@ -195,9 +195,8 @@ func (r *Runner) subscribeAndTranslate(ctx context.Context) {
 				}
 
 				for key, val := range result.XdsIR {
-					r.Logger.WithValues("xds-ir", key).Info(val.YAMLString())
 					if err := val.Validate(); err != nil {
-						r.Logger.Error(err, "unable to validate xds ir, skipped sending it")
+						r.Logger.Error(err, "unable to validate xds ir, skipped sending it", "yaml", val.YAMLString())
 						errChan <- err
 					} else {
 						r.XdsIR.Store(key, val)
