@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"time"
 
 	"github.com/docker/docker/pkg/fileutils"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
@@ -31,8 +32,20 @@ import (
 	extension "github.com/envoyproxy/gateway/internal/extension/types"
 	"github.com/envoyproxy/gateway/internal/gatewayapi"
 	"github.com/envoyproxy/gateway/internal/message"
+	"github.com/envoyproxy/gateway/internal/metrics"
 	"github.com/envoyproxy/gateway/internal/utils"
 	"github.com/envoyproxy/gateway/internal/wasm"
+)
+
+var (
+	xdsTranslateTimeTotal = metrics.NewCounter(
+		"xds_translate_time_total",
+		"total time taken to translate xds",
+	)
+	xdsTranslateCount = metrics.NewCounter(
+		"xds_translate_count",
+		"total number times of xds translate called",
+	)
 )
 
 const (
@@ -140,6 +153,7 @@ func (r *Runner) subscribeAndTranslate(ctx context.Context) {
 			statusesToDelete := r.getAllStatuses()
 
 			for _, resources := range *val {
+				beginTime := time.Now()
 				// Translate and publish IRs.
 				t := &gatewayapi.Translator{
 					GatewayControllerName:   r.Server.EnvoyGateway.Gateway.ControllerName,
@@ -276,6 +290,11 @@ func (r *Runner) subscribeAndTranslate(ctx context.Context) {
 					}
 					delete(statusesToDelete.ExtensionServerPolicyStatusKeys, key)
 				}
+
+				timeCost := time.Since(beginTime)
+				xdsTranslateTimeTotal.Add(timeCost.Seconds())
+				xdsTranslateCount.Increment()
+				r.Logger.Info("translation completed", "time", timeCost)
 			}
 
 			// Delete IR keys
