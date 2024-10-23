@@ -310,6 +310,13 @@ func (s *snapshotCache) OnStreamDeltaRequest(streamID int64, req *discoveryv3.De
 	// but that seemed like a premature optimization.
 	defer s.mu.Unlock()
 
+	defer func(){
+		lockDuration := time.Since(beginTime)
+		s.log.Infof("v3 xDS delta resource request cache lock duration, stream %d, sub %s, unsub %s, url %s, req %p, lock_duration %s",
+			streamID, req.ResourceNamesSubscribe, req.ResourceNamesUnsubscribe,
+			req.GetTypeUrl(), req, lockDuration)
+	}()
+
 	var nodeVersion string
 	var errorCode int32
 	var errorMessage string

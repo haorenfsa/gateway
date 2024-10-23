@@ -78,7 +78,9 @@ func buildEndpointType(settings []*ir.DestinationSetting) EndpointType {
 	return EndpointTypeStatic
 }
 
-const DefaultInitialFetchTimeout = 300 * time.Second
+// 0 means never
+// ref: https://www.envoyproxy.io/docs/envoy/v1.25.4/api-v3/config/core/v3/config_source.proto#envoy-v3-api-msg-config-core-v3-configsource
+const DefaultInitialFetchTimeout = 0
 
 func buildXdsCluster(args *xdsClusterArgs) *clusterv3.Cluster {
 	cluster := &clusterv3.Cluster{
