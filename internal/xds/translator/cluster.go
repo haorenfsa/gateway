@@ -78,7 +78,7 @@ func buildEndpointType(settings []*ir.DestinationSetting) EndpointType {
 	return EndpointTypeStatic
 }
 
-const DefaultInitialFetchTimeout = 120 * time.Second
+const DefaultInitialFetchTimeout = 300 * time.Second
 
 func buildXdsCluster(args *xdsClusterArgs) *clusterv3.Cluster {
 	cluster := &clusterv3.Cluster{
