@@ -130,6 +130,14 @@ func (r *Runner) subscribeAndTranslate(ctx context.Context) {
 	message.HandleSubscription(message.Metadata{Runner: string(egv1a1.LogComponentGatewayAPIRunner), Message: "provider-resources"}, r.ProviderResources.GatewayAPIResources.Subscribe(ctx),
 		func(update message.Update[string, *gatewayapi.ControllerResources], errChan chan error) {
 			r.Logger.Info("received an update")
+			beginTime := time.Now()
+			defer func() {
+				timeCost := time.Since(beginTime)
+				xdsTranslateTimeTotal.Add(timeCost.Seconds())
+				xdsTranslateCount.Increment()
+				r.Logger.Info("translate completed", "duration", timeCost)
+			}()
+
 			val := update.Value
 			// There is only 1 key which is the controller name
 			// so when a delete is triggered, delete all IR keys
@@ -153,7 +161,6 @@ func (r *Runner) subscribeAndTranslate(ctx context.Context) {
 			statusesToDelete := r.getAllStatuses()
 
 			for _, resources := range *val {
-				beginTime := time.Now()
 				// Translate and publish IRs.
 				t := &gatewayapi.Translator{
 					GatewayControllerName:   r.Server.EnvoyGateway.Gateway.ControllerName,
@@ -289,11 +296,6 @@ func (r *Runner) subscribeAndTranslate(ctx context.Context) {
 					}
 					delete(statusesToDelete.ExtensionServerPolicyStatusKeys, key)
 				}
-
-				timeCost := time.Since(beginTime)
-				xdsTranslateTimeTotal.Add(timeCost.Seconds())
-				xdsTranslateCount.Increment()
-				r.Logger.Info("translation completed", "time", timeCost)
 			}
 
 			// Delete IR keys

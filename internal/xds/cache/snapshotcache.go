@@ -69,8 +69,12 @@ type snapshotCache struct {
 // GenerateNewSnapshot takes a table of resources (the output from the IR->xDS
 // translator) and updates the snapshot version.
 func (s *snapshotCache) GenerateNewSnapshot(irKey string, resources types.XdsResources) error {
+	beginTime := time.Now()
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	defer func() {
+		s.log.Infow("Generated a new snapshot", "irKey", irKey, "duration", time.Since(beginTime))
+	}()
 
 	version := s.newSnapshotVersion()
 
@@ -259,6 +263,7 @@ func (s *snapshotCache) OnStreamResponse(_ context.Context, streamID int64, _ *d
 func (s *snapshotCache) OnDeltaStreamOpen(_ context.Context, streamID int64, _ string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.log.Infof("xDS OnDeltaStreamOpen streamID %d, open at %s", streamID, time.Now())
 
 	// Ensure that we're adding the streamID to the Node ID list.
 	s.streamIDNodeInfo[streamID] = nil
@@ -285,24 +290,25 @@ func (s *snapshotCache) OnDeltaStreamClosed(streamID int64, node *corev3.Node) {
 	delete(s.deltaStreamDuration, streamID)
 }
 
+var (
+	streamDeltaReqBeginTime     = map[*discoveryv3.DeltaDiscoveryRequest]time.Time{}
+	streamDeltaReqBeginTimeLock sync.Mutex
+)
+
 func (s *snapshotCache) OnStreamDeltaRequest(streamID int64, req *discoveryv3.DeltaDiscoveryRequest) error {
 	beginTime := time.Now()
-	s.log.Infof("handling v3 xDS delta resource request, cluster %s, response_nonce %s, resource_names_subscribe %v, resource_names_unsubscribe %v, type_url %s begin_time %s",
-		req.Node.Cluster,
-		req.ResponseNonce,
-		req.ResourceNamesSubscribe, req.ResourceNamesUnsubscribe,
-		req.GetTypeUrl(), beginTime)
+	streamDeltaReqBeginTimeLock.Lock()
+	streamDeltaReqBeginTime[req] = beginTime
+	streamDeltaReqBeginTimeLock.Unlock()
+
+	s.log.Infof("handling v3 xDS delta resource request, stream %d, sub %s, unsub %s, url %s, req %p"
+		streamID, req.ResourceNamesSubscribe, req.ResourceNamesUnsubscribe,
+		req.GetTypeUrl(), req)
 
 	s.mu.Lock()
 	// We could do this a little earlier than with a defer, since the last half of this func is logging
 	// but that seemed like a premature optimization.
 	defer s.mu.Unlock()
-	lockDuration := time.Since(beginTime)
-	s.log.Infof("handling v3 xDS delta resource request, cluster %s, response_nonce %s, resource_names_subscribe %v, resource_names_unsubscribe %v, type_url %s, lock_duration %s",
-		req.Node.Cluster,
-		req.ResponseNonce,
-		req.ResourceNamesSubscribe, req.ResourceNamesUnsubscribe,
-		req.GetTypeUrl(), lockDuration)
 
 	var nodeVersion string
 	var errorCode int32
@@ -353,7 +359,7 @@ func (s *snapshotCache) OnStreamDeltaRequest(streamID int64, req *discoveryv3.De
 	}
 
 	finishDuration := time.Since(beginTime)
-	s.log.Infof("handling v3 xDS resource delta request, response_nonce %s, nodeID %s, node_version %s, resource_names_subscribe %v, resource_names_unsubscribe %v, type_url %s, errorCode %d, errorMessage %s, finish_duration %s",
+	s.log.Debugf("handling v3 xDS delta resource request, response_nonce %s, nodeID %s, node_version %s, resource_names_subscribe %v, resource_names_unsubscribe %v, type_url %s, errorCode %d, errorMessage %s, finish_duration %s",
 		req.ResponseNonce,
 		nodeID, nodeVersion,
 		req.ResourceNamesSubscribe, req.ResourceNamesUnsubscribe,
@@ -363,10 +369,20 @@ func (s *snapshotCache) OnStreamDeltaRequest(streamID int64, req *discoveryv3.De
 	return nil
 }
 
-func (s *snapshotCache) OnStreamDeltaResponse(streamID int64, _ *discoveryv3.DeltaDiscoveryRequest, _ *discoveryv3.DeltaDiscoveryResponse) {
+func (s *snapshotCache) OnStreamDeltaResponse(streamID int64, req *discoveryv3.DeltaDiscoveryRequest, _ *discoveryv3.DeltaDiscoveryResponse) {
 	// No mutex lock required here because no writing to the cache.
-	endTime := time.Now()
-	s.log.Infof("handling v3 xDS delta resource response, streamID %d, end_time %s", streamID, endTime)
+	streamDeltaReqBeginTimeLock.Lock()
+	beginTime, ok := streamDeltaReqBeginTime[req]
+	delete(streamDeltaReqBeginTime, req)
+	streamDeltaReqBeginTimeLock.Unlock()
+	if !ok {
+		s.log.Errorf("xDS unexpected req %s", req)
+	}
+	deltaStreamDuration := time.Since(beginTime)
+	s.log.Infof("handling v3 xDS delta resource response, stream %d, sub %s, unsub %s, url %s, req %p, duration %s",
+		streamID, req.ResourceNamesSubscribe, req.ResourceNamesUnsubscribe,
+		req.GetTypeUrl(), req, deltaStreamDuration)
+
 	node := s.streamIDNodeInfo[streamID]
 	if node == nil {
 		s.log.Errorf("Tried to send a response to a node we haven't seen yet on stream %d", streamID)
@@ -376,15 +392,9 @@ func (s *snapshotCache) OnStreamDeltaResponse(streamID int64, _ *discoveryv3.Del
 }
 
 func (s *snapshotCache) OnFetchRequest(_ context.Context, req *discoveryv3.DiscoveryRequest) error {
-	beginTime := time.Now()
-	s.log.Infof("handling v3 xDS fetch, version_info %s, response_nonce %s, resource_names %v, type_url %s begin_time %s",
-		req.VersionInfo, req.ResponseNonce, req.ResourceNames, req.GetTypeUrl(), beginTime)
 	return nil
 }
 
 func (s *snapshotCache) OnFetchResponse(req *discoveryv3.DiscoveryRequest, _ *discoveryv3.DiscoveryResponse) {
 	// No mutex lock required here because no writing to the cache.
-	endTime := time.Now()
-	s.log.Infof("handling v3 xDS fetch response, version_info %s, response_nonce %s, resource_names %v, type_url %s, end_time %s",
-		req.VersionInfo, req.ResponseNonce, req.ResourceNames, req.GetTypeUrl(), endTime)
 }

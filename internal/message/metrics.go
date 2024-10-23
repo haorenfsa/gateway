@@ -16,7 +16,7 @@ var (
 	watchableSubscribeDurationSeconds = metrics.NewHistogram(
 		"watchable_subscribe_duration_seconds",
 		"How long in seconds a subscribed watchable queue is handled.",
-		[]float64{0.001, 0.01, 0.1, 1, 5, 10},
+		[]float64{0.01, 0.03, 0.1, 0.3, 0.5, 1, 3, 5, 10},
 	)
 
 	watchableSubscribeTotal = metrics.NewCounter(
