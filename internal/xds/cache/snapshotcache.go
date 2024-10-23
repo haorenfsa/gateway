@@ -24,6 +24,7 @@ import (
 	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	discoveryv3 "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	cachev3 "github.com/envoyproxy/go-control-plane/pkg/cache/v3"
+	resourcev3 "github.com/envoyproxy/go-control-plane/pkg/resource/v3"
 	serverv3 "github.com/envoyproxy/go-control-plane/pkg/server/v3"
 	"go.uber.org/zap"
 
@@ -92,7 +93,7 @@ func (s *snapshotCache) GenerateNewSnapshot(irKey string, resources types.XdsRes
 	s.lastSnapshot[irKey] = snapshot
 
 	for _, node := range s.getNodeIDs(irKey) {
-		s.log.Debugf("Generating a snapshot with Node %s", node)
+		s.log.Debugf("Generating a snapshot with Node %s [%s]", node, snapshot.GetResources(resourcev3.EndpointType))
 
 		if err = s.SetSnapshot(context.TODO(), node, snapshot); err != nil {
 			xdsSnapshotUpdateTotal.WithFailure(metrics.ReasonError, nodeIDLabel.Value(node)).Increment()
