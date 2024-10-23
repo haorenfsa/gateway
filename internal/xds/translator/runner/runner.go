@@ -8,6 +8,7 @@ package runner
 import (
 	"context"
 	"reflect"
+	"time"
 
 	ktypes "k8s.io/apimachinery/pkg/types"
 
@@ -53,6 +54,11 @@ func (r *Runner) subscribeAndTranslate(ctx context.Context) {
 	message.HandleSubscription(message.Metadata{Runner: string(egv1a1.LogComponentXdsTranslatorRunner), Message: "xds-ir"}, r.XdsIR.Subscribe(ctx),
 		func(update message.Update[string, *ir.Xds], errChan chan error) {
 			r.Logger.Info("received an update")
+			beginTime := time.Now()
+			defer func() {
+				timeCost := time.Since(beginTime)
+				r.Logger.Info("translate completed", "duration", timeCost)
+			}()
 			key := update.Key
 			val := update.Value
 
