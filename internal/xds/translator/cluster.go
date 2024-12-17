@@ -140,7 +140,7 @@ func buildXdsCluster(args *xdsClusterArgs) *clusterv3.Cluster {
 				ConfigSourceSpecifier: &corev3.ConfigSource_Ads{
 					Ads: &corev3.AggregatedConfigSource{},
 				},
-				InitialFetchTimeout: durationpb.New(DefaultInitialFetchTimeout),
+				InitialFetchTimeout: durationpb.New(DefaultInitialFetchTimeout), // [zilliz]
 			},
 		}
 	} else {

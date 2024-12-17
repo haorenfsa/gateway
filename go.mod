@@ -293,4 +293,4 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect
 )
 
-replace github.com/envoyproxy/go-control-plane => github.com/haorenfsa/go-control-plane v0.12.1-r2
+replace github.com/envoyproxy/go-control-plane => github.com/haorenfsa/go-control-plane v0.12.1-r2 // [zilliz]

@@ -103,6 +103,12 @@ func buildXdsRoute(httpRoute *ir.HTTPRoute) (*routev3.Route, error) {
 		httpRoute.Traffic.Timeout.HTTP.RequestTimeout != nil {
 		router.GetRoute().Timeout = durationpb.New(httpRoute.Traffic.Timeout.HTTP.RequestTimeout.Duration)
 	}
+	// [zilliz]
+	if router.GetRoute() != nil {
+		if router.GetRoute().Timeout == nil {
+			router.GetRoute().Timeout = durationpb.New(600 * time.Second)
+		}
+	}
 
 	// Retries
 	if router.GetRoute() != nil &&
